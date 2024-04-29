@@ -1,8 +1,8 @@
 import { collideMask, GAME } from "@/stores/game_state";
 import type { GameState } from "@/types/game_types";
 import {
-    Color3, Color4, Engine, HavokPlugin, HemisphericLight, MeshBuilder, PhysicsAggregate, PhysicsMotionType, PhysicsShapeType,
-    Scene, StandardMaterial, Tools, TransformNode,
+    Color3, Color4, DirectionalLight, Engine, HavokPlugin, HemisphericLight, MeshBuilder, PhysicsAggregate, PhysicsMotionType, PhysicsShapeType,
+    Scene, ShadowGenerator, StandardMaterial, Tools, TransformNode,
     UniversalCamera, Vector3
 } from "@babylonjs/core";
 import { cameraSettings, createFrame } from "./utils";
@@ -46,11 +46,12 @@ export class GameScene {
         GAME.Camera = this.camera;
         cameraSettings();
 
-        this.addLight(this.scene);
+        const sceneLight = this.addLight(this.scene);
         this.createWorld(this.scene);
         this.dragBoxLines();
 
         this.ball = new Ball("ball", this.scene);
+        this.appendShadows(sceneLight, this.ball.mesh);
 
         this.scene.onBeforeRenderObservable.add(() => {
 
@@ -75,6 +76,13 @@ export class GameScene {
         hemiEnemyLight.diffuse = new Color3(1, 1, 1);
         hemiEnemyLight.specular = new Color3(1, 1, 1);
         hemiEnemyLight.intensity = 1;
+
+        const dirLight = new DirectionalLight("main-scene-dirlight", new Vector3(0, -1, 0), scene);
+        dirLight.position = new Vector3(0, 5, 0);
+        dirLight.diffuse = new Color3(1, 1, 1);
+        dirLight.specular = new Color3(0.2, 0.2, 0.2);
+        dirLight.intensity = 0.1;
+        return dirLight;
     }
     createWorld(scene: Scene) {
         const world_node = new TransformNode("world-transform-node", scene);
@@ -106,8 +114,8 @@ export class GameScene {
 
         // --------- ROOF -------------->
         const roof = MeshBuilder.CreatePlane("roof", {
-            width: this.gameBox.width+2,
-            height: this.gameBox.height+2,
+            width: this.gameBox.width + 2,
+            height: this.gameBox.height + 2,
         }, scene);
         roof.rotation.x = Tools.ToRadians(90);
         roof.position.y = 0.7;
@@ -123,7 +131,7 @@ export class GameScene {
         roof_aggregate.body.setMotionType(PhysicsMotionType.STATIC);
         roof_aggregate.shape.filterMembershipMask = collideMask.roof;
         roof_aggregate.shape.filterCollideMask = collideMask.groups.roof;
-        
+
         const roof2 = MeshBuilder.CreatePlane("roof2", {
             width: this.gameBox.width + 2,
             height: this.gameBox.height + 2,
@@ -140,8 +148,9 @@ export class GameScene {
         roof2_aggregate.shape.filterCollideMask = collideMask.groups.roof;
 
         //---------- WALLS ------------->
-        
+
         ground.parent = world_node;
+
         const wall_coord = [
             new Vector3(-10, -13, 0),
             new Vector3(10, -13, 0),
@@ -156,7 +165,7 @@ export class GameScene {
             new Vector3(0.2, 0.2, 0),
             new Vector3(0.2, 1.5, 0)
         ];
-        const walls = createFrame("wall", { path: wall_coord, profile: profilePoints }, this.scene)
+        const walls = createFrame("wall", { path: wall_coord, profile: profilePoints }, this.scene);
         walls.rotation.x = Tools.ToRadians(90);
         const wall_mt = new StandardMaterial("wall-mt", scene);
         wall_mt.diffuseColor = Color3.FromHexString("#6c6874");;
@@ -171,6 +180,8 @@ export class GameScene {
         wall_aggregate.shape.filterCollideMask = collideMask.groups.ground;
         world_node.position.x -= 0.2;
         //--------------------------------------------->  
+        ground.receiveShadows = true;
+        walls.receiveShadows = true;
 
         return world_node;
     }
@@ -193,5 +204,11 @@ export class GameScene {
             new Vector3(this.dragBox.rigth, 0.1, this.dragBox.down)],
             colors: [new Color4(0.3, 0.5, 0.5, 1), new Color4(0.9, 0.5, 0.5, 1), new Color4(0.3, 0.5, 0.5, 1)]
         }, this.scene)
+    }
+    appendShadows(light: Light, mesh: Mesh) {
+        const shadowGen = new ShadowGenerator(512, light);
+        shadowGen.useKernelBlur = true;
+        shadowGen.useExponentialShadowMap = true
+        shadowGen.addShadowCaster(mesh);
     }
 }

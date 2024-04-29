@@ -21,12 +21,14 @@ export class Ball {
         max: 50,
         min: 10,
     }
-    private initPosition = new Vector3(0, 1, -5.5);
+    private initPosition = new Vector3(0, 0.35, -5.5);
     private initImpulse = new Vector3(0, 0, 100);
     private initSpeed = new Vector3(0, 0, 500);
     private ballRunObserver: Observer<Mesh> | null = null;
 
-
+    get mesh() {
+        return this.ball;
+    }
     get isRun() {
         return this._isRun;
     }
@@ -44,6 +46,7 @@ export class Ball {
         this.scene = scene;
         this.ball = MeshBuilder.CreateSphere(name, { diameter: this.radius * 2 }, scene);
         this.ball.position = this.initPosition;
+        this.ball.receiveShadows = true;
         this.appendPhysics();
     }
     private appendPhysics() {
