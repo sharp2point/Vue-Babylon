@@ -1,18 +1,27 @@
-import type{ GameState } from "@/types/game_types";
+import type { GameState } from "@/types/game_types";
 
+export const GAMESIGNALS = {
+    NONE: 1,
+    RUN: 10,
+    WIN: 20,
+    GAMEOTHER: 30,
+}
 export const GAME: GameState = {
     HVK: null,
     Canvas: null,
     Engine: null,
     Gravity: null,
     GameScene: null,
-    Camera:null,
+    Camera: null,
+    dragBox: {
+        up: -7,
+        down: -11.5,
+        left: -8.5,
+        rigth: 8.5
+    },
+    gameState: GAMESIGNALS.NONE
 };
-export const SIGNALS = {
-    PRELOAD: false,
-    MENU: false,
-    GAME_RUN: false,
-}
+
 export const collideMask = {
     shield: 0b00000001,
     ball: 0b00000010,

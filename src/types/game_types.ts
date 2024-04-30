@@ -7,4 +7,11 @@ export type GameState = {
     Gravity: Vector3 | null,
     GameScene: Scene | null,
     Camera: UniversalCamera | null
+    dragBox: {
+        up: number,
+        down: number,
+        left: number,
+        rigth: number
+    }
+    gameState: number
 }

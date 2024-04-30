@@ -1,9 +1,11 @@
-import { collideMask, GAME } from "@/stores/game_state";
+import { collideMask, GAME, GAMESIGNALS } from "@/stores/game_state";
 import {
     HavokPlugin, Mesh, MeshBuilder, Observer, PhysicsAggregate,
     PhysicsMotionType, PhysicsShapeType,
+    Quaternion,
     Scene, setAndStartTimer, Vector3
 } from "@babylonjs/core";
+import type { Shield } from "./shield";
 
 
 export class Ball {
@@ -22,7 +24,7 @@ export class Ball {
         min: 10,
     }
     private initPosition = new Vector3(0, 0.35, -5.5);
-    private initImpulse = new Vector3(0, 0, 100);
+    private initImpulse = new Vector3(0, 0, 1000);
     private initSpeed = new Vector3(0, 0, 500);
     private ballRunObserver: Observer<Mesh> | null = null;
 
@@ -44,7 +46,7 @@ export class Ball {
 
     constructor(name: string, scene: Scene) {
         this.scene = scene;
-        this.ball = MeshBuilder.CreateSphere(name, { diameter: this.radius * 2 }, scene);
+        this.ball = MeshBuilder.CreateSphere(name, { diameter: this.radius * 2,segments:8 }, scene);
         this.ball.position = this.initPosition;
         this.ball.receiveShadows = true;
         this.appendPhysics();
@@ -85,14 +87,11 @@ export class Ball {
             }
         });
     }
-    getAbsolutePosition() {
-        return this.ball.getAbsolutePosition();
-    }
     velocityControl() {
         if (this.aggregate) {
             const length = this.aggregate.body.getLinearVelocity().length();
             if (length < this.speedLimits.min) {
-                this.aggregate.body.applyImpulse((this.aggregate.body.getLinearVelocity().multiply(new Vector3(1.1, 0, 1.1))), this.getAbsolutePosition());
+                this.aggregate.body.applyImpulse((this.aggregate.body.getLinearVelocity().multiply(new Vector3(1.1, 0, 1.1))), this.ball.getAbsolutePosition());
             } else if (length > this.speedLimits.max) {
                 this.aggregate.body.setLinearVelocity(this.aggregate.body.getLinearVelocity().multiply(new Vector3(0.75, 0, 0.75)));
             }
@@ -104,18 +103,20 @@ export class Ball {
             this.aggregate.body.setLinearVelocity(this.aggregate.body.getLinearVelocity().clone().multiply(new Vector3(1, 0, 1)))
         }
     }
-    // ballJoinShield(shield: Shield) {
-    //     this.aggregate.body.setTargetTransform(shield.position.add(new Vector3(0, 0, 0.5)), Quaternion.Identity());
-    // }
+    ballJoinShield(shield: Shield) {
+        if (this.aggregate) {
+           this.aggregate.body.setTargetTransform(shield.position.add(new Vector3(0, 0.0, 0.5)), Quaternion.Identity()); 
+        }
+    }
     private onRunObserver() {
-        // if (GameState.state.gameState === GameState.state.signals.GAME_RUN && this._isRun) {
-        //     this.velocityControl();
-        //     this.clearBallVelocityY();
-        //     if (this.ball.position.z < GameState.state.dragBox.down) {
-        //         if (GameState.state.gameState !== GameState.state.signals.GAME_OTHER_BALL) {
-        //             GameState.changeGameState(GameState.state.signals.GAME_OTHER_BALL);
-        //         }
-        //     }
-        // }
+        if (GAME.gameState=== GAMESIGNALS.RUN && this._isRun) {
+            this.velocityControl();
+            this.clearBallVelocityY();
+            // if (this.ball.position.z < GameState.state.dragBox.down) {
+            //     if (GameState.state.gameState !== GameState.state.signals.GAME_OTHER_BALL) {
+            //         GameState.changeGameState(GameState.state.signals.GAME_OTHER_BALL);
+            //     }
+            // }
+        }
     }
 }

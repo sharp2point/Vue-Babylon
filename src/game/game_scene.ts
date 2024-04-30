@@ -1,13 +1,19 @@
-import { collideMask, GAME } from "@/stores/game_state";
+import { collideMask, GAME, GAMESIGNALS } from "@/stores/game_state";
 import type { GameState } from "@/types/game_types";
 import {
-    Color3, Color4, DirectionalLight, Engine, HavokPlugin, HemisphericLight, MeshBuilder, PhysicsAggregate, PhysicsMotionType, PhysicsShapeType,
+    Color3, Color4, DirectionalLight, Engine, HavokPlugin, HemisphericLight,
+    Material,
+    Mesh, MeshBuilder, PhysicsAggregate, PhysicsMotionType, PhysicsShapeType,
     Scene, ShadowGenerator, StandardMaterial, Tools, TransformNode,
-    UniversalCamera, Vector3
+    UniversalCamera, Vector3,
+    type IShadowLight
 } from "@babylonjs/core";
 import { cameraSettings, createFrame } from "./utils";
 import { useCameraDebugStore } from "@/stores/camera_debug_store";
 import { Ball } from "./objects/ball";
+import { Shield } from "./objects/shield";
+import { Inspector } from "@babylonjs/inspector";
+import { initAllMaterials } from "./materials/all_materials";
 
 export class GameScene {
     private scene: Scene;
@@ -21,6 +27,8 @@ export class GameScene {
     private camera: UniversalCamera;
     private cameraStore;
     private ball: Ball | null = null;
+    private shield: Shield | null = null;
+    private allMaterials: Map<string, Material>;
 
     get gameScene() {
         return this.scene;
@@ -47,14 +55,23 @@ export class GameScene {
         cameraSettings();
 
         const sceneLight = this.addLight(this.scene);
+
+        this.allMaterials = initAllMaterials(this.scene);
         this.createWorld(this.scene);
         this.dragBoxLines();
 
+        this.shield = new Shield("shield", new Vector3(0, 0, -9), this.scene);
+
         this.ball = new Ball("ball", this.scene);
         this.appendShadows(sceneLight, this.ball.mesh);
+        this.addSceneGameEvents();
 
         this.scene.onBeforeRenderObservable.add(() => {
-
+            if (this.ball && this.shield) {
+                if (!this.ball.isRun) {
+                    this.ball.ballJoinShield(this.shield);
+                }
+            }
         })
         this.scene.onKeyboardObservable.add((info) => {
             switch (info.event.key) {
@@ -63,8 +80,17 @@ export class GameScene {
                     break;
                 }
             }
-        })
+            if (info.event.key === 'i' && info.event.altKey) {
+                if (Inspector.IsVisible) {
+                    Inspector.Hide();
+                } else {
+                    Inspector.Show(this.scene, { embedMode: true, });
+                }
+            }
+        });
+        GAME.gameState = GAMESIGNALS.RUN;
     }
+
     changeAmbientColor(color: Color3) {
         this.scene.ambientColor = color;
     }
@@ -91,17 +117,6 @@ export class GameScene {
             height: this.gameBox.height
         }, scene);
         ground.receiveShadows = true;
-        const ground_mt = new StandardMaterial(`${ground.name}-mt`, scene);
-        ground_mt.diffuseColor = Color3.FromHexString("#fefade");
-        //Color3.FromHexString("#240935");
-        //Color3.FromHexString("#434750");
-        //Color3.FromHexString("#474a51");
-        //Color3.FromHexString("#6c6874");
-        //Color3.FromHexString("#7a7666");
-        //Color3.FromHexString("#6c6960"); 
-        //new Color3(0.21, 0.19, 0.21);
-        ground_mt.maxSimultaneousLights = 10;
-        ground.material = ground_mt;
 
         const ground_aggregate = new PhysicsAggregate(ground, PhysicsShapeType.CONVEX_HULL, {
             mass: 10000,
@@ -120,11 +135,6 @@ export class GameScene {
         roof.rotation.x = Tools.ToRadians(90);
         roof.position.y = 0.7;
 
-        const roof_mt = new StandardMaterial("roof-mt", scene);
-        roof_mt.diffuseColor = new Color3(0, 0, 0);
-        roof_mt.alpha = 0.01;
-        roof.material = roof_mt;
-
         const roof_aggregate = new PhysicsAggregate(roof, PhysicsShapeType.BOX, {
             mass: 100000, friction: 0, restitution: 0
         }, scene);
@@ -138,7 +148,6 @@ export class GameScene {
         }, scene);
         roof2.rotation.x = Tools.ToRadians(90);
         roof2.position.y = 0.9;
-        roof2.material = roof_mt;
 
         const roof2_aggregate = new PhysicsAggregate(roof, PhysicsShapeType.BOX, {
             mass: 100000, friction: 0, restitution: 0
@@ -166,11 +175,8 @@ export class GameScene {
             new Vector3(0.2, 1.5, 0)
         ];
         const walls = createFrame("wall", { path: wall_coord, profile: profilePoints }, this.scene);
+        walls.receiveShadows = true;
         walls.rotation.x = Tools.ToRadians(90);
-        const wall_mt = new StandardMaterial("wall-mt", scene);
-        wall_mt.diffuseColor = Color3.FromHexString("#6c6874");;
-        wall_mt.alpha = 1;
-        walls.material = wall_mt;
         walls.setParent(world_node);
         const wall_aggregate = new PhysicsAggregate(walls, PhysicsShapeType.MESH, {
             mass: 100000, restitution: 0.5, friction: 0.5
@@ -178,10 +184,22 @@ export class GameScene {
         wall_aggregate.body.setMotionType(PhysicsMotionType.STATIC);
         wall_aggregate.shape.filterMembershipMask = collideMask.ground;
         wall_aggregate.shape.filterCollideMask = collideMask.groups.ground;
+
+        const wall_aggregate2 = new PhysicsAggregate(walls, PhysicsShapeType.MESH, {
+            mass: 100000, restitution: 0.5, friction: 0.5
+        }, this.scene)
+        wall_aggregate2.body.setMotionType(PhysicsMotionType.STATIC);
+        wall_aggregate2.shape.filterMembershipMask = collideMask.ground;
+        wall_aggregate2.shape.filterCollideMask = collideMask.groups.ground;
         world_node.position.x -= 0.2;
         //--------------------------------------------->  
         ground.receiveShadows = true;
         walls.receiveShadows = true;
+
+        ground.material = this.allMaterials.get('groundMaterial') as StandardMaterial;
+        roof.material = this.allMaterials.get('roofMaterial') as StandardMaterial;
+        roof2.material = this.allMaterials.get('roofMaterial') as StandardMaterial;
+        walls.material = this.allMaterials.get('wallMaterial') as StandardMaterial;
 
         return world_node;
     }
@@ -205,10 +223,39 @@ export class GameScene {
             colors: [new Color4(0.3, 0.5, 0.5, 1), new Color4(0.9, 0.5, 0.5, 1), new Color4(0.3, 0.5, 0.5, 1)]
         }, this.scene)
     }
-    appendShadows(light: Light, mesh: Mesh) {
+    appendShadows(light: IShadowLight, mesh: Mesh) {
         const shadowGen = new ShadowGenerator(512, light);
         shadowGen.useKernelBlur = true;
         shadowGen.useExponentialShadowMap = true
         shadowGen.addShadowCaster(mesh);
+    }
+    addSceneGameEvents() {
+        this.scene.onPointerDown = () => {
+            if (this.shield && this.ball) {
+                if (GAME.gameState === GAMESIGNALS.RUN && !this.shield.pointerDown) {
+                    const pic = this.scene.pick(this.scene.pointerX, this.scene.pointerY, () => true);
+                    this.shield.pointerDown = true;
+                    this.shield.position = pic.pickedPoint as Vector3;
+                }
+            }
+        };
+        this.scene.onPointerUp = () => {
+            if (this.shield && this.ball) {
+                if (GAME.gameState === GAMESIGNALS.RUN && this.shield.pointerDown) {
+                    this.shield.pointerDown = false;
+                    if (!this.ball.isRun) {
+                        this.ball.run();
+                    }
+                }
+            }
+        }
+        this.scene.onPointerMove = () => {
+            if (this.shield && this.ball) {
+                if (GAME.gameState === GAMESIGNALS.RUN && this.shield.pointerDown) {
+                    const pic = this.scene.pick(this.scene.pointerX, this.scene.pointerY, () => true);
+                    this.shield.position = pic.pickedPoint as Vector3;
+                }
+            }
+        }
     }
 }
